@@ -1,0 +1,1 @@
+# LinkedIn scraper module for extracting profile data
