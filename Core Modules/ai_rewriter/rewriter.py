@@ -24,10 +24,16 @@ if not api_key:
             api_key = os.getenv("GROQ_API_KEY")
             if api_key:
                 break
-if not api_key:
-    raise ValueError("GROQ_API_KEY not found in environment variables. Please set it in your .env file or environment.")
 
-client = Groq(api_key=api_key)
+# Initialize client only if API key is available
+client = None
+if api_key:
+    try:
+        client = Groq(api_key=api_key)
+    except Exception as e:
+        print(f"Warning: Could not initialize Groq client: {e}")
+elif not api_key:
+    print("Warning: GROQ_API_KEY not found. AI features will be disabled until API key is configured.")
 MODEL = "llama-3.3-70b-versatile"
 
 SYSTEM_PROMPT = """You are a world-class LinkedIn profile optimizer and career coach.
@@ -44,34 +50,47 @@ Vary your language. Be specific. Be human."""
 
 def _call_groq(prompt: str, max_tokens: int = 800) -> str:
     """Standard (non-streaming) Groq call."""
-    resp = client.chat.completions.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        temperature=0.7,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": prompt},
-        ],
-    )
-    return resp.choices[0].message.content.strip()
+    if not client:
+        return "❌ AI feature unavailable: GROQ_API_KEY not configured. Please set your API key in Streamlit Cloud secrets or environment variables."
+    
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt},
+            ],
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        return f"❌ Error connecting to AI service: {str(e)}"
 
 
 def _stream_groq(prompt: str, max_tokens: int = 800) -> Generator[str, None, None]:
     """Streaming Groq call — yields text chunks."""
-    stream = client.chat.completions.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        temperature=0.7,
-        stream=True,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": prompt},
-        ],
-    )
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content or ""
-        if delta:
-            yield delta
+    if not client:
+        yield "❌ AI feature unavailable: GROQ_API_KEY not configured. Please set your API key in Streamlit Cloud secrets or environment variables."
+        return
+    
+    try:
+        stream = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            temperature=0.7,
+            stream=True,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt},
+            ],
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta
+    except Exception as e:
+        yield f"❌ Error connecting to AI service: {str(e)}"
 
 
 def rewrite_headline(
