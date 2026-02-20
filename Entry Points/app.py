@@ -759,10 +759,15 @@ if run_btn:
         if rewritten and isinstance(rewritten, dict):
             st.write(f"✅ AI rewrite successful. Generated {len(rewritten)} sections:")
             for section_name, content in rewritten.items():
-                if content and not content.startswith("❌"):
-                    st.write(f"  - {section_name}: {len(str(content))} chars")
+                if isinstance(content, str):
+                    if content and not content.startswith("❌"):
+                        st.write(f"  - {section_name}: {len(content)} chars")
+                    else:
+                        st.write(f"  - ❌ {section_name}: {content}")
+                elif isinstance(content, list):
+                    st.write(f"  - {section_name}: {len(content)} items")
                 else:
-                    st.write(f"  - ❌ {section_name}: {content}")
+                    st.write(f"  - {section_name}: {type(content).__name__} ({len(str(content))} chars)")
         else:
             st.error(f"❌ AI rewrite failed. Result: {rewritten}")
             
@@ -1104,10 +1109,17 @@ SCORE BREAKDOWN
             st.markdown("Formatted PDF with before/after comparisons, score bars, and action items.")
             if st.button("⚡ Generate PDF Report", use_container_width=True, key="gen_pdf"):
                 try:
+                    # Check for fpdf2 installation first
+                    try:
+                        import fpdf
+                    except ImportError:
+                        st.error("fpdf2 is not installed. Please run: pip install fpdf2")
+                        st.stop()
+                        
                     from exporter.pdf_report import generate_pdf_report
                     with st.spinner("Generating PDF…"):
                         pdf_path = generate_pdf_report(
-                            user_profile, rewritten, scores, gap, top_analysis, target_role
+                            user_profile, rewritten, scores, gap, top_analysis, target_role, use_unicode=True
                         )
                     with open(pdf_path, "rb") as f:
                         st.download_button(

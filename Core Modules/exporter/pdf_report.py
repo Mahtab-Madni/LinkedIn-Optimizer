@@ -23,8 +23,12 @@ WHITE   = (255, 255, 255)
 
 
 def clean_text_for_pdf(text: str) -> str:
+    """Clean text to make it compatible with PDF fonts"""
     if not text:
         return text
+    
+    # Convert to string if not already
+    text = str(text)
     
     # Replace smart quotes and apostrophes
     text = text.replace(''', "'")  # left single quotation mark
@@ -39,25 +43,39 @@ def clean_text_for_pdf(text: str) -> str:
     # Replace other common Unicode characters
     text = text.replace('…', '...')  # ellipsis
     text = text.replace('•', '*')    # bullet
+    text = text.replace('◈', '>>')  # diamond
+    text = text.replace('✓', '(+)')  # checkmark
+    text = text.replace('⚠', '(!)')  # warning
+    text = text.replace('\u00A0', ' ')  # non-breaking space to regular space
     
-    return text
+    # Remove or replace other problematic characters
+    # Keep only ASCII printable characters plus basic Latin-1
+    cleaned = ''
+    for char in text:
+        if ord(char) <= 255:  # Latin-1 range
+            cleaned += char
+        else:
+            cleaned += '?'  # Replace with placeholder
+    
+    return cleaned
 
 
 class LinkedInReport(FPDF):
-    def __init__(self, user_name: str, target_role: str, use_unicode: bool = False):
+    def __init__(self, user_name: str, target_role: str, use_unicode: bool = True):
         super().__init__()
-        self.user_name   = user_name
-        self.target_role = target_role
-        self.use_unicode = use_unicode
+        self.user_name   = clean_text_for_pdf(user_name)
+        self.target_role = clean_text_for_pdf(target_role)
+        self.use_unicode = False  # Default to False for better compatibility
         self.set_auto_page_break(auto=True, margin=20)
         
         # If Unicode support is requested, try to add a Unicode font
-        if self.use_unicode:
+        if use_unicode:
             try:
                 # Try to use DejaVu Sans for Unicode support
                 self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
                 self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
                 self.add_font('DejaVu', 'I', 'DejaVuSans-Oblique.ttf', uni=True)
+                self.use_unicode = True
                 self.unicode_font_available = True
             except:
                 # Fall back to ASCII if Unicode font is not available
@@ -79,10 +97,9 @@ class LinkedInReport(FPDF):
         # Use Unicode or ASCII symbol based on font support
         symbol = "◈" if self.use_unicode else ">>"
         
-        # Clean the header text if not using Unicode
+        # Always clean the header text for compatibility
         header_text = f"{symbol}  LinkedIn Profile Optimizer · DataMind"
-        if not self.use_unicode:
-            header_text = clean_text_for_pdf(header_text)
+        header_text = clean_text_for_pdf(header_text)
         
         self.set_xy(10, 5)
         self.cell(0, 8, header_text, align="L")
@@ -96,8 +113,8 @@ class LinkedInReport(FPDF):
         self.set_font(font_family, "I", 8)
         self.set_text_color(*GRAY)
         footer_text = f"Page {self.page_no()} · Confidential · {self.user_name}"
-        if not self.use_unicode:
-            footer_text = clean_text_for_pdf(footer_text)
+        # Always clean text for compatibility
+        footer_text = clean_text_for_pdf(footer_text)
         self.cell(0, 10, footer_text, align="C")
 
     def section_title(self, title: str, color=ACCENT):
@@ -105,9 +122,8 @@ class LinkedInReport(FPDF):
         self.set_font(font_family, "B", 12)
         self.set_text_color(*color)
         self.set_fill_color(*LIGHT)
-        # Clean text of Unicode characters if not using Unicode fonts
-        if not self.use_unicode:
-            title = clean_text_for_pdf(title)
+        # Always clean text to ensure compatibility
+        title = clean_text_for_pdf(title)
         self.cell(0, 9, f"  {title}", ln=True, fill=True)
         self.set_draw_color(*color)
         self.line(10, self.get_y(), 200, self.get_y())
@@ -117,9 +133,8 @@ class LinkedInReport(FPDF):
         font_family = "DejaVu" if self.use_unicode else "Helvetica"
         self.set_font(font_family, "", 10)
         self.set_text_color(*color)
-        # Clean text of Unicode characters if not using Unicode fonts
-        if not self.use_unicode:
-            text = clean_text_for_pdf(text)
+        # Always clean text to ensure compatibility
+        text = clean_text_for_pdf(text)
         self.multi_cell(0, 6, text)
         self.ln(2)
 
@@ -127,32 +142,38 @@ class LinkedInReport(FPDF):
         font_family = "DejaVu" if self.use_unicode else "Helvetica"
         self.set_font(font_family, "B", 9)
         self.set_text_color(*GRAY)
-        # Clean text of Unicode characters if not using Unicode fonts
-        if not self.use_unicode:
-            text = clean_text_for_pdf(text)
+        # Always clean text to ensure compatibility
+        text = clean_text_for_pdf(text)
         self.cell(0, 5, text.upper(), ln=True)
         self.ln(1)
 
-    def score_bar(self, label: str, score: float, max_score: float = 100):
-        """Draw a visual score bar."""
-        pct = min(score / max_score, 1.0)
-        color = GREEN if pct >= 0.7 else GOLD if pct >= 0.4 else RED
-
-        self.set_font("Helvetica", "", 9)
+    def score_bar(self, label: str, score: int, max_val: int = 100):
+        """Draw a horizontal score bar with label."""
+        font_family = "DejaVu" if self.use_unicode else "Helvetica"
+        
+        # Clean the label text
+        label = clean_text_for_pdf(label)
+        
+        self.set_font(font_family, "", 9)
         self.set_text_color(*NAVY)
-        self.cell(70, 6, label)
-        self.cell(20, 6, f"{score:.0f}/{max_score:.0f}", align="R")
-
-        # Bar background
-        bar_x = self.get_x() + 5
-        bar_y = self.get_y() + 1
-        self.set_fill_color(220, 220, 220)
-        self.rect(bar_x, bar_y, 80, 4, style="F")
-
-        # Filled portion
+        self.cell(65, 5, label)
+        
+        bar_w = 80
+        bar_h = 5
+        fill_w = int((score / max_val) * bar_w)
+        
+        # Background bar
+        self.set_fill_color(*LIGHT)
+        self.rect(self.get_x(), self.get_y(), bar_w, bar_h, style="F")
+        
+        # Score bar
+        color = GREEN if score >= (max_val * 0.7) else GOLD if score >= (max_val * 0.5) else RED
         self.set_fill_color(*color)
-        self.rect(bar_x, bar_y, 80 * pct, 4, style="F")
-
+        self.rect(self.get_x(), self.get_y(), fill_w, bar_h, style="F")
+        
+        # Score text
+        self.set_xy(self.get_x() + bar_w + 5, self.get_y())
+        self.cell(20, 5, f"{score}/{max_val}")
         self.ln(7)
 
     def pill(self, text: str, bg_color=ACCENT):
@@ -161,9 +182,8 @@ class LinkedInReport(FPDF):
         self.set_font(font_family, "", 8)
         self.set_fill_color(*bg_color)
         self.set_text_color(*WHITE)
-        # Clean text if not using Unicode fonts
-        if not self.use_unicode:
-            text = clean_text_for_pdf(text)
+        # Always clean text for compatibility
+        text = clean_text_for_pdf(text)
         w = self.get_string_width(text) + 6
         if self.get_x() + w > 195:
             self.ln(7)
@@ -174,11 +194,10 @@ class LinkedInReport(FPDF):
         """Side-by-side before/after comparison."""
         font_family = "DejaVu" if self.use_unicode else "Helvetica"
         
-        # Clean all text if not using Unicode fonts
-        if not self.use_unicode:
-            label = clean_text_for_pdf(label)
-            original = clean_text_for_pdf(original or "")
-            rewritten = clean_text_for_pdf(rewritten or "")
+        # Always clean all text for compatibility
+        label = clean_text_for_pdf(label)
+        original = clean_text_for_pdf(original or "")
+        rewritten = clean_text_for_pdf(rewritten or "")
         
         self.set_font(font_family, "B", 9)
         self.set_text_color(*GRAY)
@@ -207,28 +226,41 @@ class LinkedInReport(FPDF):
         self.set_xy(start_x + col_w + 6, start_y)
         self.cell(col_w - 4, 4, "AFTER (OPTIMIZED)")
 
-        self.set_xy(start_x, start_y + 5)
-
-        # Before content
-        font_family = "DejaVu" if self.use_unicode else "Helvetica"
+        # Content boxes
+        self.set_xy(start_x, start_y + 4)
         self.set_font(font_family, "", 8)
         self.set_text_color(*NAVY)
-        before_text = original[:400] + ("..." if len(original) > 400 else "")
-        # Clean text if not using Unicode fonts
-        if not self.use_unicode:
-            before_text = clean_text_for_pdf(before_text or "(empty)")
-        self.multi_cell(col_w, 4.5, before_text or "(empty)")
 
-        after_y = start_y + 5
-        self.set_xy(start_x + col_w + 4, after_y)
-        after_text = rewritten[:400] + ("..." if len(rewritten) > 400 else "")
-        # Clean text if not using Unicode fonts
-        if not self.use_unicode:
-            after_text = clean_text_for_pdf(after_text or "(empty)")
-        self.multi_cell(col_w, 4.5, after_text or "(empty)")
+        # Before content
+        lines_before = original.split('\n')[:6]  # Limit lines
+        content_before = '\n'.join(lines_before[:3]) + ('...' if len(lines_before) > 3 else '')
+        if len(content_before) > 200:
+            content_before = content_before[:200] + "..."
 
-        end_y = max(self.get_y(), start_y + 30)
-        self.set_y(end_y + 4)
+        # After content
+        lines_after = rewritten.split('\n')[:6]
+        content_after = '\n'.join(lines_after[:3]) + ('...' if len(lines_after) > 3 else '')
+        if len(content_after) > 200:
+            content_after = content_after[:200] + "..."
+
+        # Draw content boxes with border
+        box_height = 25
+        self.set_draw_color(*GRAY)
+
+        # Before box
+        self.rect(start_x, start_y + 4, col_w, box_height)
+        self.set_xy(start_x + 2, start_y + 6)
+        with self.local_context():
+            self.multi_cell(col_w - 4, 3, content_before, border=0)
+
+        # After box
+        self.rect(start_x + col_w + 4, start_y + 4, col_w, box_height)
+        self.set_xy(start_x + col_w + 6, start_y + 6)
+        with self.local_context():
+            self.multi_cell(col_w - 4, 3, content_after, border=0)
+
+        # Move cursor after boxes
+        self.set_xy(10, start_y + 4 + box_height + 5)
 
 
 def generate_pdf_report(
@@ -239,7 +271,7 @@ def generate_pdf_report(
     top_analysis: dict,
     target_role: str,
     output_path: str = None,
-    use_unicode: bool = False,
+    use_unicode: bool = True,
 ) -> str:
     if not FPDF_AVAILABLE:
         raise RuntimeError("fpdf2 not installed. Run: pip install fpdf2")
@@ -265,8 +297,7 @@ def generate_pdf_report(
     pdf.set_xy(16, pdf.get_y())
     # Clean user name and target role text
     subtitle_text = f"{user_name}  ·  Target Role: {target_role}"
-    if not pdf.use_unicode:
-        subtitle_text = clean_text_for_pdf(subtitle_text)
+    subtitle_text = clean_text_for_pdf(subtitle_text)
     pdf.cell(0, 6, subtitle_text, ln=True)
     pdf.ln(18)
 
@@ -306,72 +337,57 @@ def generate_pdf_report(
         pdf.pill(skill, RED)
     pdf.ln(9)
 
-    pdf.label(f"Skills You Already Have {check_symbol}")
-    for skill in gap.get("present_skills", [])[:12]:
+    pdf.label("Present Skills (You already have these)")
+    for skill in gap.get("present_skills", [])[:8]:
         pdf.pill(skill, GREEN)
     pdf.ln(9)
 
-    pdf.label("Missing Power Verbs in Experience")
-    for verb in gap.get("missing_power_verbs", []):
-        pdf.pill(verb, GOLD)
-    pdf.ln(9)
+    pdf.label("Top Industry Keywords")
+    for keyword in top_analysis.get("top_keywords", [])[:10]:
+        pdf.pill(keyword, ACCENT)
+    pdf.ln(6)
 
-    has_metrics = gap.get("has_quantified_metrics", False)
-    pdf.body_text(
-        f"{f'{check_symbol} Quantified metrics found in your profile.' if has_metrics else f'{warning_symbol} No quantified metrics detected - add numbers to your experience bullets for 2x more impact.'}",
-        GREEN if has_metrics else RED,
-    )
-    pdf.ln(2)
+    # ── AI Improvements ──────────────────────────────────────────────────────
+    pdf.section_title(f"{diamond_symbol} AI-Optimized Profile Content")
 
-    # ── Optimized Headline ────────────────────────────────────────────────────
-    pdf.add_page()
-    pdf.section_title(f"{diamond_symbol} Optimized Headline")
-    pdf.comparison_box(
-        "LinkedIn Headline",
-        user_profile.get("headline", ""),
-        rewritten.get("headline", ""),
-    )
-
-    # ── Optimized About ───────────────────────────────────────────────────────
-    pdf.section_title(f"{diamond_symbol} Optimized About Section")
-    pdf.comparison_box(
-        "About / Summary",
-        user_profile.get("about", ""),
-        rewritten.get("about", ""),
-    )
-
-    # ── Experience ────────────────────────────────────────────────────────────
-    pdf.add_page()
-    pdf.section_title(f"{diamond_symbol} Optimized Experience Bullets")
-    for i, exp in enumerate(rewritten.get("experience", []), 1):
-        font_family = "DejaVu" if pdf.use_unicode else "Helvetica"
-        pdf.set_font(font_family, "B", 10)
-        pdf.set_text_color(*NAVY)
-        exp_title = f"{i}. {exp.get('title', '')} @ {exp.get('company', '')}"
-        if not pdf.use_unicode:
-            exp_title = clean_text_for_pdf(exp_title)
-        pdf.cell(0, 6, exp_title, ln=True)
+    # Headline
+    if "headline" in rewritten:
         pdf.comparison_box(
-            "",
-            exp.get("original", ""),
-            exp.get("rewritten", ""),
+            "Professional Headline",
+            user_profile.get("headline", ""),
+            rewritten["headline"]
         )
 
-    # ── Skills Recommendations ────────────────────────────────────────────────
-    pdf.section_title(f"{diamond_symbol} Skills Recommendations")
-    pdf.body_text(rewritten.get("skills_recommendations", ""))
+    # About section
+    if "about" in rewritten:
+        pdf.comparison_box(
+            "About Section",
+            user_profile.get("about", ""),
+            rewritten["about"]
+        )
 
-    # ── Next Steps ────────────────────────────────────────────────────────────
-    pdf.section_title(f"{diamond_symbol} Your Top 5 Action Items", GOLD)
-    next_steps = [
-        f"1. Update your headline to: \"{rewritten.get('headline', '').strip()[:80]}...\"",
-        f"2. Add {len(gap.get('missing_skills', []))} missing skills to your Skills section",
-        "3. Replace your About section with the optimized version above",
-        "4. Add quantified metrics to ALL experience bullets (%, $, numbers)",
-        f"5. Connect with people who hold the role: '{target_role}' for referrals",
+    # Experience bullets
+    if "experience" in rewritten and rewritten["experience"]:
+        for i, exp in enumerate(rewritten["experience"][:2]):  # Show top 2
+            pdf.comparison_box(
+                f"Experience: {exp.get('title', 'Role')} at {exp.get('company', 'Company')}",
+                exp.get("original", ""),
+                exp.get("rewritten", "")
+            )
+
+    # ── Action Items ────────────────────────────────────────────────────────
+    pdf.section_title(f"{diamond_symbol} Recommended Actions")
+    
+    actions = [
+        f"{check_symbol} Update headline with target role keywords",
+        f"{check_symbol} Add missing skills to your Skills section",
+        f"{check_symbol} Incorporate industry keywords into your About section",
+        f"{check_symbol} Quantify achievements with metrics in experience descriptions",
+        f"{warning_symbol} Consider getting endorsements for missing skills",
     ]
-    for step in next_steps:
-        pdf.body_text(f"  {step}")
-
+    
+    for action in actions:
+        pdf.body_text(action)
+    
     pdf.output(output_path)
     return output_path
