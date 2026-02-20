@@ -736,6 +736,13 @@ if run_btn:
     progress.progress(45, text="Scoring your profile…")
 
     scores = compute_overall_score(user_profile, top_profiles, top_analysis, gap)
+    
+    # Debug: Check if scoring worked
+    if scores:
+        st.write(f"✅ Profile scoring successful. Overall score: {scores.get('total', 'unknown')}")
+    else:
+        st.error("❌ Profile scoring failed")
+        
     progress.progress(60, text="AI rewriting headline…")
 
     # Stream headline
@@ -745,7 +752,24 @@ if run_btn:
     st.session_state.scores         = scores
 
     # Full rewrite (non-streaming for pipeline)
-    rewritten = rewrite_full_profile(user_profile, target_role, top_analysis, gap)
+    try:
+        st.write("🔄 Starting AI profile rewrite...")
+        rewritten = rewrite_full_profile(user_profile, target_role, top_analysis, gap)
+        
+        if rewritten and isinstance(rewritten, dict):
+            st.write(f"✅ AI rewrite successful. Generated {len(rewritten)} sections:")
+            for section_name, content in rewritten.items():
+                if content and not content.startswith("❌"):
+                    st.write(f"  - {section_name}: {len(str(content))} chars")
+                else:
+                    st.write(f"  - ❌ {section_name}: {content}")
+        else:
+            st.error(f"❌ AI rewrite failed. Result: {rewritten}")
+            
+    except Exception as e:
+        st.error(f"❌ Error during AI rewrite: {str(e)}")
+        st.exception(e)
+        rewritten = {}
     progress.progress(95, text="Generating optimization summary…")
 
     opt_summary = generate_optimization_summary(scores, gap, target_role)
@@ -840,17 +864,34 @@ if st.session_state.optimization_done and st.session_state.scores:
             placeholder = st.empty()
             full = ""
             extra = f" Additional requirement: {custom_note}" if custom_note else ""
-            for chunk in rewrite_headline(
-                user_profile.get("headline", ""), 
-                user_profile.get("current_role", ""), 
-                target_role,
-                top_analysis.get("top_keywords", []),
-                gap.get("present_skills", []), stream=True,
-            ):
-                full += chunk
-                placeholder.markdown(f'<div class="streaming-box">{full}▌</div>', unsafe_allow_html=True)
-            placeholder.markdown(f'<div class="streaming-box">{full}</div>', unsafe_allow_html=True)
-            st.session_state.rewritten["headline"] = full
+            
+            # Debug info
+            st.write("🔍 Debug Info:")
+            st.write(f"- Current role: {user_profile.get('current_role', 'None')}")
+            st.write(f"- Target role: {target_role}")
+            st.write(f"- Top keywords available: {len(top_analysis.get('top_keywords', []))}")
+            st.write(f"- Present skills available: {len(gap.get('present_skills', []))}")
+            
+            try:
+                with st.spinner("🤖 Generating optimized headline..."):
+                    for chunk in rewrite_headline(
+                        user_profile.get("headline", ""), 
+                        user_profile.get("current_role", ""), 
+                        target_role,
+                        top_analysis.get("top_keywords", []),
+                        gap.get("present_skills", []), stream=True,
+                    ):
+                        full += chunk
+                        placeholder.markdown(f'<div class="streaming-box">{full}▌</div>', unsafe_allow_html=True)
+                placeholder.markdown(f'<div class="streaming-box">{full}</div>', unsafe_allow_html=True)
+                st.session_state.rewritten["headline"] = full
+                
+                if not full or "❌" in full:
+                    st.error(f"AI function returned: {full}")
+                    
+            except Exception as e:
+                st.error(f"❌ Error generating headline: {str(e)}")
+                st.exception(e)
 
     # ── TAB 3: About ──────────────────────────────────────────────────────────
     with tabs[2]:
@@ -871,18 +912,36 @@ if st.session_state.optimization_done and st.session_state.scores:
             exp_titles = [e.get("title", "") for e in user_profile.get("experience", [])]
             placeholder = st.empty()
             full = ""
-            for chunk in rewrite_about(
-                user_profile.get("about", ""), 
-                user_profile.get("current_role", ""), 
-                target_role,
-                top_analysis.get("top_keywords", []),
-                gap.get("missing_skills", []),
-                gap.get("present_skills", []),
-                exp_titles, stream=True,
-            ):
-                full += chunk
-                placeholder.markdown(f'<div class="streaming-box">{full}▌</div>', unsafe_allow_html=True)
-            placeholder.markdown(f'<div class="streaming-box">{full}</div>', unsafe_allow_html=True)
+            
+            # Debug info
+            st.write("🔍 Debug Info:")
+            st.write(f"- Current about length: {len(user_profile.get('about', ''))}")
+            st.write(f"- Experience titles: {len(exp_titles)}")
+            st.write(f"- Missing skills: {len(gap.get('missing_skills', []))}")
+            st.write(f"- Present skills: {len(gap.get('present_skills', []))}")
+            
+            try:
+                with st.spinner("🤖 Generating optimized about section..."):
+                    for chunk in rewrite_about(
+                        user_profile.get("about", ""), 
+                        user_profile.get("current_role", ""), 
+                        target_role,
+                        top_analysis.get("top_keywords", []),
+                        gap.get("missing_skills", []),
+                        gap.get("present_skills", []),
+                        exp_titles, stream=True,
+                    ):
+                        full += chunk
+                        placeholder.markdown(f'<div class="streaming-box">{full}▌</div>', unsafe_allow_html=True)
+                placeholder.markdown(f'<div class="streaming-box">{full}</div>', unsafe_allow_html=True)
+                st.session_state.rewritten["about"] = full
+                
+                if not full or "❌" in full:
+                    st.error(f"AI function returned: {full}")
+                    
+            except Exception as e:
+                st.error(f"❌ Error generating about section: {str(e)}")
+                st.exception(e)
             st.session_state.rewritten["about"] = full
 
     # ── TAB 4: Experience ─────────────────────────────────────────────────────
