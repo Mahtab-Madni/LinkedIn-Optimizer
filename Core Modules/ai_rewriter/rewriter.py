@@ -5,17 +5,25 @@ from typing import Generator, List
 from groq import Groq
 from dotenv import load_dotenv
 
-# Try Streamlit secrets first (for cloud deployment)
-api_key = None
-try:
-    import streamlit as st
-    if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
-        api_key = st.secrets['GROQ_API_KEY']
-except (ImportError, AttributeError, KeyError):
-    pass
+# Global client variable
+client = None
 
-# If not found in Streamlit secrets, try environment variables and .env files
-if not api_key:
+def get_api_key():
+    """Get API key from various sources with proper priority."""
+    api_key = None
+    
+    # Try Streamlit secrets first (for cloud deployment)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
+            api_key = st.secrets['GROQ_API_KEY']
+            print(f"API key loaded from Streamlit secrets: {api_key[:10]}...")
+            return api_key
+    except (ImportError, AttributeError, KeyError, Exception) as e:
+        print(f"Streamlit secrets not available: {e}")
+        pass
+
+    # If not found in Streamlit secrets, try environment variables and .env files
     env_path = Path(__file__).parent.parent.parent / "Data & Configuration" / ".env"
     if env_path.exists():
         load_dotenv(env_path)
@@ -23,28 +31,47 @@ if not api_key:
         load_dotenv()  
     
     api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        possible_paths = [
-            Path(__file__).parent.parent.parent / "Data & Configuration" / ".env",
-            Path(__file__).parent.parent / ".env", 
-            Path(".env")
-        ]
-        for path in possible_paths:
-            if path.exists():
-                load_dotenv(path)
-                api_key = os.getenv("GROQ_API_KEY")
-                if api_key:
-                    break
+    if api_key:
+        print(f"API key loaded from environment: {api_key[:10]}...")
+        return api_key
+        
+    # Try other possible .env locations
+    possible_paths = [
+        Path(__file__).parent.parent.parent / "Data & Configuration" / ".env",
+        Path(__file__).parent.parent / ".env", 
+        Path(".env")
+    ]
+    for path in possible_paths:
+        if path.exists():
+            load_dotenv(path)
+            api_key = os.getenv("GROQ_API_KEY")
+            if api_key:
+                print(f"API key loaded from {path}: {api_key[:10]}...")
+                return api_key
+    
+    print("No API key found in any location")
+    return None
 
-# Initialize client only if API key is available
-client = None
-if api_key:
-    try:
-        client = Groq(api_key=api_key)
-    except Exception as e:
-        print(f"Warning: Could not initialize Groq client: {e}")
-elif not api_key:
-    print("Warning: GROQ_API_KEY not found. AI features will be disabled until API key is configured.")
+def get_client():
+    """Get or create Groq client with dynamic API key loading."""
+    global client
+    
+    if client is None:
+        api_key = get_api_key()
+        if api_key:
+            try:
+                client = Groq(api_key=api_key)
+                print("✅ Groq client initialized successfully")
+                return client
+            except Exception as e:
+                print(f"❌ Could not initialize Groq client: {e}")
+                return None
+        else:
+            print("❌ No API key available")
+            return None
+    
+    return client
+
 MODEL = "llama-3.3-70b-versatile"
 
 SYSTEM_PROMPT = """You are a world-class LinkedIn profile optimizer and career coach.
@@ -61,6 +88,7 @@ Vary your language. Be specific. Be human."""
 
 def _call_groq(prompt: str, max_tokens: int = 800) -> str:
     """Standard (non-streaming) Groq call."""
+    client = get_client()
     if not client:
         return "❌ AI feature unavailable: GROQ_API_KEY not configured. Please set your API key in Streamlit Cloud secrets or environment variables."
     
@@ -81,6 +109,7 @@ def _call_groq(prompt: str, max_tokens: int = 800) -> str:
 
 def _stream_groq(prompt: str, max_tokens: int = 800) -> Generator[str, None, None]:
     """Streaming Groq call — yields text chunks."""
+    client = get_client()
     if not client:
         yield "❌ AI feature unavailable: GROQ_API_KEY not configured. Please set your API key in Streamlit Cloud secrets or environment variables."
         return
