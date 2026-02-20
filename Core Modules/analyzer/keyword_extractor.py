@@ -187,18 +187,40 @@ def extract_power_verbs(text: str) -> List[str]:
 
 def profile_to_full_text(profile: dict) -> str:
     """Flatten a profile dict into a single text blob for analysis."""
+    if not isinstance(profile, dict):
+        print(f"❌ Warning: profile_to_full_text received non-dict: {type(profile)}")
+        return ""
+    
     parts = [
         profile.get("headline", ""),
         profile.get("about", ""),
     ]
-    for exp in profile.get("experience", []):
-        parts.extend([
-            exp.get("title", ""),
-            exp.get("company", ""),
-            exp.get("description", ""),
-        ])
-    parts.extend(profile.get("skills", []))
-    return " ".join(p for p in parts if p)
+    
+    # Handle experience with defensive programming
+    experience = profile.get("experience", [])
+    if not isinstance(experience, list):
+        print(f"❌ Warning: experience field is not a list: {type(experience)}")
+        experience = []
+    
+    for exp in experience:
+        if isinstance(exp, dict):
+            parts.extend([
+                exp.get("title", ""),
+                exp.get("company", ""),
+                exp.get("description", ""),
+            ])
+        else:
+            print(f"❌ Warning: experience entry is not a dict: {type(exp)}")
+    
+    # Handle skills with defensive programming  
+    skills = profile.get("skills", [])
+    if not isinstance(skills, list):
+        print(f"❌ Warning: skills field is not a list: {type(skills)}")
+        skills = []
+    
+    parts.extend(str(skill) for skill in skills if skill)
+    
+    return " ".join(str(p) for p in parts if p)
 
 
 def extract_metrics(text: str) -> List[str]:
@@ -214,18 +236,61 @@ def analyze_profile(profile: dict) -> Dict:
     Full analysis of a single profile.
     Returns skills, keywords, power verbs, metrics found.
     """
-    full_text = profile_to_full_text(profile)
+    if not isinstance(profile, dict):
+        print(f"❌ Error: analyze_profile received non-dict: {type(profile)}")
+        return {
+            "skills": [],
+            "tfidf_keywords": [],
+            "power_verbs": [],
+            "metrics": [],
+            "headline_length": 0,
+            "about_length": 0,
+            "experience_count": 0,
+            "skills_count": 0,
+        }
+    
+    try:
+        full_text = profile_to_full_text(profile)
+        
+        # Defensive handling of profile fields
+        headline = profile.get("headline", "")
+        about = profile.get("about", "")
+        experience = profile.get("experience", [])
+        skills = profile.get("skills", [])
+        
+        # Ensure they're the right types
+        if not isinstance(headline, str):
+            headline = str(headline) if headline else ""
+        if not isinstance(about, str):
+            about = str(about) if about else ""
+        if not isinstance(experience, list):
+            experience = []
+        if not isinstance(skills, list):
+            skills = []
 
-    return {
-        "skills": extract_skills_from_text(full_text),
-        "tfidf_keywords": extract_keywords_tfidf([full_text], top_n=25),
-        "power_verbs": extract_power_verbs(full_text),
-        "metrics": extract_metrics(full_text),
-        "headline_length": len(profile.get("headline", "").split()),
-        "about_length": len(profile.get("about", "").split()),
-        "experience_count": len(profile.get("experience", [])),
-        "skills_count": len(profile.get("skills", [])),
-    }
+        return {
+            "skills": extract_skills_from_text(full_text),
+            "tfidf_keywords": extract_keywords_tfidf([full_text], top_n=25) if full_text else [],
+            "power_verbs": extract_power_verbs(full_text),
+            "metrics": extract_metrics(full_text),
+            "headline_length": len(headline.split()),
+            "about_length": len(about.split()),
+            "experience_count": len(experience),
+            "skills_count": len(skills),
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in analyze_profile: {str(e)}")
+        return {
+            "skills": [],
+            "tfidf_keywords": [],
+            "power_verbs": [],
+            "metrics": [],
+            "headline_length": 0,
+            "about_length": 0,
+            "experience_count": 0,
+            "skills_count": 0,
+        }
 
 
 def analyze_top_profiles(profiles: List[dict]) -> Dict:

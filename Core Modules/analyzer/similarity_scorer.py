@@ -91,41 +91,81 @@ def keyword_gap_analysis(user_profile: dict, top_profile_analysis: dict) -> Dict
     Compare user's skills/keywords against top profiles.
     Returns missing skills, missing keywords, and coverage scores.
     """
-    user_text = profile_to_full_text(user_profile)
-    user_skills = set(extract_skills_from_text(user_text))
-    user_keywords = set(user_text.lower().split())
+    try:
+        if not isinstance(user_profile, dict):
+            print(f"❌ Error: user_profile is not a dict: {type(user_profile)}")
+            return {
+                "missing_skills": [],
+                "present_skills": [],
+                "skill_coverage_pct": 0,
+                "missing_keywords": [],
+                "missing_power_verbs": [],
+                "present_power_verbs": [],
+                "has_quantified_metrics": False,
+                "metrics_found": [],
+            }
+            
+        if not isinstance(top_profile_analysis, dict):
+            print(f"❌ Error: top_profile_analysis is not a dict: {type(top_profile_analysis)}")
+            return {
+                "missing_skills": [],
+                "present_skills": [],
+                "skill_coverage_pct": 0,
+                "missing_keywords": [],
+                "missing_power_verbs": [],
+                "present_power_verbs": [],
+                "has_quantified_metrics": False,
+                "metrics_found": [],
+            }
+        
+        user_text = profile_to_full_text(user_profile)
+        user_skills = set(extract_skills_from_text(user_text))
+        user_keywords = set(user_text.lower().split()) if user_text else set()
 
-    top_skills = set(top_profile_analysis.get("top_skills", []))
-    top_keywords = set(top_profile_analysis.get("top_keywords", []))
-    top_verbs = set(top_profile_analysis.get("top_verbs", []))
+        top_skills = set(top_profile_analysis.get("top_skills", []))
+        top_keywords = set(top_profile_analysis.get("top_keywords", []))
+        top_verbs = set(top_profile_analysis.get("top_verbs", []))
 
-    # Skills gap
-    missing_skills = sorted(top_skills - user_skills)
-    present_skills = sorted(top_skills & user_skills)
-    skill_coverage = round(len(present_skills) / len(top_skills) * 100, 1) if top_skills else 0
+        # Skills gap
+        missing_skills = sorted(top_skills - user_skills) if top_skills and user_skills else list(top_skills)
+        present_skills = sorted(top_skills & user_skills) if top_skills and user_skills else []
+        skill_coverage = round(len(present_skills) / len(top_skills) * 100, 1) if top_skills else 0
 
-    # Keyword gap
-    missing_keywords = [kw for kw in top_keywords if kw not in user_keywords][:15]
+        # Keyword gap
+        missing_keywords = [kw for kw in top_keywords if kw not in user_keywords][:15] if top_keywords and user_keywords else []
 
-    # Verb gap
-    user_verbs = set(extract_power_verbs(user_text))
-    missing_verbs = sorted(top_verbs - user_verbs)[:8]
-    present_verbs = sorted(top_verbs & user_verbs)
+        # Verb gap
+        user_verbs = set(extract_power_verbs(user_text)) if user_text else set()
+        missing_verbs = sorted(top_verbs - user_verbs)[:8] if top_verbs and user_verbs else []
+        present_verbs = sorted(top_verbs & user_verbs) if top_verbs and user_verbs else []
 
-    # Metrics check
-    user_metrics = extract_metrics(user_text)
-    has_metrics = len(user_metrics) > 0
+        # Metrics check
+        user_metrics = extract_metrics(user_text) if user_text else []
+        has_metrics = len(user_metrics) > 0
 
-    return {
-        "missing_skills": missing_skills[:15],
-        "present_skills": present_skills[:15],
-        "skill_coverage_pct": skill_coverage,
-        "missing_keywords": missing_keywords,
-        "missing_power_verbs": missing_verbs,
-        "present_power_verbs": present_verbs,
-        "has_quantified_metrics": has_metrics,
-        "metrics_found": user_metrics[:5],
-    }
+        return {
+            "missing_skills": missing_skills[:15],
+            "present_skills": present_skills[:15],
+            "skill_coverage_pct": skill_coverage,
+            "missing_keywords": missing_keywords,
+            "missing_power_verbs": missing_verbs,
+            "present_power_verbs": present_verbs,
+            "has_quantified_metrics": has_metrics,
+            "metrics_found": user_metrics[:5],
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in keyword_gap_analysis: {str(e)}")
+        return {
+            "missing_skills": [],
+            "present_skills": [],
+            "skill_coverage_pct": 0,
+            "missing_keywords": [],
+            "missing_power_verbs": [],
+            "present_power_verbs": [],
+            "has_quantified_metrics": False,
+            "metrics_found": [],
+        }
 
 
 def score_profile_section(section: str, benchmark_avg_length: int, text: str) -> Dict:
