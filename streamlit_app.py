@@ -635,7 +635,8 @@ def main():
                         gap_analysis = keyword_gap_analysis(user_analysis, benchmark_analysis)
                         overall_score = compute_overall_score(
                             st.session_state.profile_data,
-                            user_analysis,
+                            st.session_state.benchmark_profiles,
+                            benchmark_analysis,
                             gap_analysis
                         )
                         
@@ -772,11 +773,20 @@ def main():
                         try:
                             results = st.session_state.analysis_results
                             gap_analysis = results['gap_analysis']
+                            user_analysis = results['user_analysis']
                             
                             optimized_headlines = rewrite_headline(
-                                profile_data,
-                                missing_keywords=gap_analysis.get('missing_keywords', [])
+                                profile_data.get("headline", ""),
+                                profile_data.get("current_role", ""),
+                                profile_data.get("target_role", ""),
+                                user_analysis.get("top_keywords", []),
+                                gap_analysis.get("present_skills", []),
+                                stream=False
                             )
+                            
+                            # Parse the response if it's a single string
+                            if isinstance(optimized_headlines, str):
+                                optimized_headlines = [optimized_headlines]
                             
                             st.session_state.optimization_results['headlines'] = optimized_headlines
                             
@@ -810,11 +820,20 @@ def main():
                         try:
                             results = st.session_state.analysis_results
                             gap_analysis = results['gap_analysis']
+                            user_analysis = results['user_analysis']
                             
                             new_headlines = rewrite_headline(
-                                profile_data,
-                                missing_keywords=gap_analysis.get('missing_keywords', [])
+                                profile_data.get("headline", ""),
+                                profile_data.get("current_role", ""),
+                                profile_data.get("target_role", ""),
+                                user_analysis.get("top_keywords", []),
+                                gap_analysis.get("present_skills", []),
+                                stream=False
                             )
+                            
+                            # Parse the response if it's a single string
+                            if isinstance(new_headlines, str):
+                                new_headlines = [new_headlines]
                             
                             st.session_state.optimization_results['headlines'] = new_headlines
                             st.experimental_rerun()
@@ -848,10 +867,18 @@ def main():
                         try:
                             results = st.session_state.analysis_results
                             gap_analysis = results['gap_analysis']
+                            user_analysis = results['user_analysis']
+                            exp_titles = [e.get("title", "") for e in profile_data.get("experience", [])]
                             
                             optimized_about = rewrite_about(
-                                profile_data,
-                                missing_keywords=gap_analysis.get('missing_keywords', [])
+                                profile_data.get("about", ""),
+                                profile_data.get("current_role", ""),
+                                profile_data.get("target_role", ""),
+                                user_analysis.get("top_keywords", []),
+                                gap_analysis.get("missing_skills", []),
+                                gap_analysis.get("present_skills", []),
+                                exp_titles,
+                                stream=False
                             )
                             
                             st.session_state.optimization_results['about'] = optimized_about
@@ -885,12 +912,18 @@ def main():
                             try:
                                 results = st.session_state.analysis_results
                                 gap_analysis = results['gap_analysis']
-                                
-                                new_about = rewrite_about(
-                                    profile_data,
-                                    missing_keywords=gap_analysis.get('missing_keywords', [])
-                                )
-                                
+                            user_analysis = results['user_analysis']
+                            exp_titles = [e.get("title", "") for e in profile_data.get("experience", [])]
+                            
+                            new_about = rewrite_about(
+                                profile_data.get("about", ""),
+                                profile_data.get("current_role", ""),
+                                profile_data.get("target_role", ""),
+                                user_analysis.get("top_keywords", []),
+                                gap_analysis.get("missing_skills", []),
+                                gap_analysis.get("present_skills", []),
+                                exp_titles,
+                                stream=False
                                 st.session_state.optimization_results['about'] = new_about
                                 st.experimental_rerun()
                                 
