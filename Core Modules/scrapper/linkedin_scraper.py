@@ -79,6 +79,9 @@ def parse_linkedin_pdf(pdf_file) -> dict:
         for page in reader.pages:
             text += page.extract_text() + "\n"
         
+        # Create lowercase version for text processing
+        text_lower = text.lower()
+        
         # Initialize profile structure
         profile = {
             "url": "pdf_upload",
@@ -135,7 +138,6 @@ def parse_linkedin_pdf(pdf_file) -> dict:
                 profile["current_role"] = "Professional"
         
         # Extract about section (look for summary/about keywords)
-        text_lower = text.lower()
         about_start = None
         for keyword in ['about', 'summary', 'overview']:
             if keyword in text_lower:
