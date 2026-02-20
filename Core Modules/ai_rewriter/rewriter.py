@@ -5,25 +5,36 @@ from typing import Generator, List
 from groq import Groq
 from dotenv import load_dotenv
 
-env_path = Path(__file__).parent.parent.parent / "Data & Configuration" / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
-else:
-    load_dotenv()  
+# Try Streamlit secrets first (for cloud deployment)
+api_key = None
+try:
+    import streamlit as st
+    if hasattr(st, 'secrets') and 'GROQ_API_KEY' in st.secrets:
+        api_key = st.secrets['GROQ_API_KEY']
+except (ImportError, AttributeError, KeyError):
+    pass
 
-api_key = os.getenv("GROQ_API_KEY")
+# If not found in Streamlit secrets, try environment variables and .env files
 if not api_key:
-    possible_paths = [
-        Path(__file__).parent.parent.parent / "Data & Configuration" / ".env",
-        Path(__file__).parent.parent / ".env", 
-        Path(".env")
-    ]
-    for path in possible_paths:
-        if path.exists():
-            load_dotenv(path)
-            api_key = os.getenv("GROQ_API_KEY")
-            if api_key:
-                break
+    env_path = Path(__file__).parent.parent.parent / "Data & Configuration" / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        load_dotenv()  
+    
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        possible_paths = [
+            Path(__file__).parent.parent.parent / "Data & Configuration" / ".env",
+            Path(__file__).parent.parent / ".env", 
+            Path(".env")
+        ]
+        for path in possible_paths:
+            if path.exists():
+                load_dotenv(path)
+                api_key = os.getenv("GROQ_API_KEY")
+                if api_key:
+                    break
 
 # Initialize client only if API key is available
 client = None
